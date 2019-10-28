@@ -5,42 +5,16 @@ from myFun import SoilRoot,XylemLeaf, InitialState, f_PM_hydraulics
 
 
 # Site specific parameters
-#sitename = 'US-Me2'
-#soil_texture = 2; root_type = 4
-#root_depth = 2; canopy_height = 33; tower_height = 47 # in meters
-#soil_b = 0.62 # calibration coefficient for soil hydraulic parameter, unitless
-#boundary_cond = 0.253 # boundary condition of the second soil layer, in volumnetric water content
-#gpmax = 3.9e-6 # maximum xylem conductance, m/s/MPa
-#p50 = -5.86 # psi_50, MPa
-#aa = 4.53 # shape parameter of vulnerability curve, unitless
-#lww = 6255 # marginal water use efficiency under a well-watered condition # umol/mol
-#b0 = -1.28 # sensitivity of MWUE to leaf water potential, /MPa
-#nobsinaday = 48 # number of observations per day
-
-
-#sitename = 'AU-Wom'
-#soil_texture = 2; root_type = 9
-#root_depth = 3.5; canopy_height = 25; tower_height = 30 # in meters
-#soil_b = 1.13 # calibration coefficient for soil hydraulic parameter, unitless
-#boundary_cond = 0.35 # boundary condition of the second soil layer, in volumnetric water content
-#gpmax = 4.9e-8 # maximum xylem conductance, m/s/MPa
-#p50 = -6.69 # psi_50, MPa
-#aa = 3.96 # shape parameter of vulnerability curve, unitless
-#lww = 555.2 # marginal water use efficiency under a well-watered condition # umol/mol
-#b0 = -1.96 # sensitivity of MWUE to leaf water potential, /MPa
-#nobsinaday = 48 # number of observations per day
-
-
-sitename = 'IT-Lav'
-soil_texture = 4; root_type = 4
-root_depth = 1.82; canopy_height = 33; tower_height = 36 # in meters
-soil_b = 0.74 # calibration coefficient for soil hydraulic parameter, unitless
-boundary_cond = 0.40 # boundary condition of the second soil layer, in volumnetric water content
-gpmax = 2.69e-8 # maximum xylem conductance, m/s/MPa
-p50 = -8.88 # psi_50, MPa
-aa = 2.31 # shape parameter of vulnerability curve, unitless
-lww = 2298 # marginal water use efficiency under a well-watered condition # umol/mol
-b0 = -1.80 # sensitivity of MWUE to leaf water potential, /MPa
+sitename = 'US-Me2'
+soil_texture = 2; root_type = 4
+root_depth = 2; canopy_height = 33; tower_height = 47 # in meters
+soil_b = 0.62 # calibration coefficient for soil hydraulic parameter, unitless
+boundary_cond = 0.253 # boundary condition of the second soil layer, in volumnetric water content
+gpmax = 3.9e-6 # maximum xylem conductance, m/s/MPa
+p50 = -5.86 # psi_50, MPa
+aa = 4.53 # shape parameter of vulnerability curve, unitless
+lww = 6255 # marginal water use efficiency under a well-watered condition # umol/mol
+b0 = -1.28 # sensitivity of MWUE to leaf water potential, /MPa
 nobsinaday = 48 # number of observations per day
 
 
