@@ -14,6 +14,7 @@ sitename = 'US-Me2'
 soil_texture = 2; root_type = 4
 root_depth = 2; canopy_height = 33; tower_height = 47 # in meters
 nobsinaday = 48 # number of observations per day
+warmup = 60 # warmup period, days
 
 df = pd.read_csv(sitename+'.csv')[:nobsinaday*365] # use the first year to retrieve parameters, as an example
 SRparas = SoilRoot(soil_texture,root_type,root_depth,canopy_height,tower_height,24*3600/nobsinaday,1,0)
@@ -48,7 +49,7 @@ chainid = arrayid-fid*chains_per_site
 
 mVPD = np.mean(df['VPD'][(df['P']==0) & (df['RNET']>0)])
 discard = dailyAvg(df['P'],nobsinaday)>10/nobsinaday # rainy days
-discard[:30*2] = True # warm up period
+discard[:warmup] = True # warm up period
 observed_day_valid = dailyAvg(df['ET'],nobsinaday)[~discard]
 
 varnames = ['gpmax','p50','aa','lww','b0','sigma','calib','bc']
