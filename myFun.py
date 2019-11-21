@@ -9,7 +9,7 @@ THETAS = np.array([0.395,0.410,0.435,0.485,0.451,0.420,0.477,0.476,0.426,0.492,0
 KSAT = np.array([1.056,0.938,0.208,0.0432,0.0417,0.0378,0.0102,0.0147,0.0130,0.0062,0.0077])*1e-2/60
 
 def ClappHornberger(pct,th,calib):
-    if type(pct)!=int: # when input is soil texture
+    if type(pct)!=int:
         sand,silt,clay = pct
         if silt+1.5*clay<15: 
             tx = 0 # sand
@@ -37,7 +37,7 @@ def ClappHornberger(pct,th,calib):
             tx = 3 # silt
         else:
             tx = np.nan
-    else: # when input is soil texture
+    else:
         tx = int(np.copy(pct))
     
     b = BB[tx]*calib
@@ -154,7 +154,11 @@ def PenmanMonteith(temp,rnet,vpd,gv,gh): # vpd in mol/mol
 DPSI = 0.01
 PSIL_RANGE = np.arange(0,-15,-DPSI)
 
-def f_PM_hydraulics(df,XLparas,SRparas,Init,ww):
+def f_PM_hydraulics(df,SRparas,theta):
+#   gpmax,p50,aa,lww,b0
+    XLparas = XylemLeaf(theta[0]*1e-9,theta[1],theta[2],theta[3],theta[4])
+    SRparas.calib,SRparas.bc = np.copy(theta[6]),np.copy(theta[7])
+    
     RNg = df['RNET']*np.exp(-df['LAI']*df['Vegk'])
     RNl = df['RNET']-RNg
     
@@ -162,6 +166,7 @@ def f_PM_hydraulics(df,XLparas,SRparas,Init,ww):
     ggv = np.array(1/(1/ggh+1/df['GSOIL']))
     Eg = PenmanMonteith(df['TEMP'],RNg,df['VPD'],ggv,ggh) # mol/m2/s
     
+    Init = InitialState(-0.2,-0.5,-0.8,-0.4,df['SOILM'][0],max(df['SOILM'][0],0.5))
     PSIL = np.zeros([len(df),])+Init.psil
     El = np.zeros([len(df),])
     
@@ -169,30 +174,28 @@ def f_PM_hydraulics(df,XLparas,SRparas,Init,ww):
     KS = np.cumsum(VC*DPSI)    
     for t in range(1,len(df)):
         Clm = Climate(df['TEMP'][t],df['VPD'][t],RNl[t],df['LAI'][t])
-        El[t],PSIL[t],psir,s2 = calSPAC(Clm,df['GA'][t],SRparas,XLparas,KS,Init,ww)
+        El[t],PSIL[t],psir,s2 = calSPAC(Clm,df['GA'][t],SRparas,XLparas,KS,Init)
         if t>47:psil_avg = np.mean(PSIL[t-47:t+1])
         else: psil_avg = Init.psil_avg
-        if ww==0:
-            Init = InitialState(psir,Init.psix,PSIL[t],psil_avg,df['SOILM'][t],s2)
-        else:
-            Init = InitialState(psir,Init.psix,PSIL[t],psil_avg,df['SOILM'][t],df['SOILM2'][t])
-    return (El+Eg)*1e3,PSIL
+        Init = InitialState(psir,Init.psix,PSIL[t],psil_avg,df['SOILM'][t],s2)
+    return El+Eg,PSIL
 
-def calSPAC(Clm,glh,SRparas,XLparas,KS,Init,ww):
+def calSPAC(Clm,glh,SRparas,XLparas,KS,Init):
     ll = MWU(XLparas.lww,XLparas.b0,ca,Init.psil_avg)
-    gs, An, H, flag, ci, a1, a2 = f_carbon(Clm,ll) # mol H2O /m2/s
-    gs = gs*a0*Clm.lai
+    gs = f_carbon(Clm,ll) # mol CO2 /m2 leaf area /s
+#    print(gs);print(type(gs))
+    gs = gs*a0*Clm.lai # mol H2O /m2 ground area /s
     glv = 1/(1/glh+1/gs)
     E = PenmanMonteith(Clm.temp,Clm.rnet,Clm.vpd,glv,glh) # mol/m2/s
-#    Tl = (Clm.rnet-lambdamol*E)/glh/Cpmol+Clm.temp
     Ems = E*18*1e-6 # m/s
-    psis,gsr,s2 = soilhydro(Init,SRparas,ww)
+    psis,gsr,s2 = soilhydro(Init,SRparas)
     psir = psis-Ems/gsr
     if psir<min(PSIL_RANGE):psir=min(PSIL_RANGE)
     tmp = np.abs(KS-KS[int(-psir/DPSI)]-Ems) # \int_{\psi_r}^{\psi_l}KS(x)=Ems
     psil = PSIL_RANGE[tmp==min(tmp)]
     if psil==min(PSIL_RANGE):E = 0
     return E,psil,psir,s2
+
 
 def VulnerabilityCurve(psil,gpmax,p50,aa):
     return gpmax/(1+(psil/p50)**aa)
@@ -201,7 +204,6 @@ def MWU(lww,b0,ca,psil):
     return ca/ca0*lww*np.exp(b0*psil)
 
 def f_carbon(Clm,ll):
-#    ll = np.array([ll])
     T,RNET,VPD = (Clm.temp,Clm.rnet,Clm.vpd)
     
     PAR = RNET/(Ephoton*NA)*1e6 # absorbed photon irradiance, umol photons /m2/s, PAR
@@ -242,42 +244,41 @@ def f_carbon(Clm,ll):
         gc2, ci2, An2 = (0,0,0)
         
     flag = (An1<=An2)*1
-    An = min(An1,An2)
+#    An = min(An1,An2)
     gc = gc1*flag+gc2*(1-flag)
-    ci = ci1*flag+ci2*(1-flag)
-    H = gc*(ca-ci)-a0*gc*VPD*ll
-    a1 = J/4*flag+Vcmax*(1-flag)
-    a2 = 2*cp*flag+Kc*(1+Coa/Ko)*(1-flag)
-    return gc,An,H,flag,ci,a1,a2
+#    ci = ci1*flag+ci2*(1-flag)
+#    H = gc*(ca-ci)-a0*gc*VPD*ll
+#    a1 = J/4*flag+Vcmax*(1-flag)
+#    a2 = 2*cp*flag+Kc*(1+Coa/Ko)*(1-flag)
+    return gc
 
 
-def soilhydro(Init,SRparas,ww):
+def soilhydro(Init,SRparas):
+    
     K1,P1,tmp,tmp,tmp,tmp,tmp = ClappHornberger(SRparas.tx,Init.s1,SRparas.calib)
     gsr1 = K1*np.sqrt(SRparas.RAI1)/(rhow*g*SRparas.Zr1*np.pi)*UNIT_2
+    
     if SRparas.Zr2>0:
         K2,P2,tmp,tmp,tmp,tmp,tmp = ClappHornberger(SRparas.tx,Init.s2,SRparas.calib)
         gsr2 = K2*np.sqrt(SRparas.RAI2)/(rhow*g*SRparas.Zr2*np.pi)*UNIT_2
         gsr = gsr1+gsr2
         psis = (gsr1*P1+gsr2*P2)/gsr
-        if ww==0: # model the second layer soil moisture
-            E2 = gsr2*(P2-Init.psir)
-            K12 = 2/(1/K1+1/K2)
-            L12 = K12*(P1+(SRparas.Zr1+SRparas.Zr2)/2*rhow*g/UNIT_2-P2)/(rhow*g*(SRparas.Zr1+SRparas.Zr2)/2/UNIT_2) # m/s
-            if SRparas.bc>0:
-                K3,P3,tmp,tmp,tmp,tmp,tmp = ClappHornberger(SRparas.tx,SRparas.bc,SRparas.calib)
-                K23 = 2/(1/K2+1/K3)
-                L23 = K23*(P2+SRparas.Zr2/2*rhow*g/UNIT_2-P3)/(rhow*g*SRparas.Zr2/2/UNIT_2) # m/s
-            else:
-                L23 = 0
-            s2 = min(max(Init.s2+(L12-L23-E2)/SRparas.Zr2*SRparas.dt,SRparas.sw2),SRparas.sfc2)
-        else: # use data second layer soil moisture data
-            s2 = 0
+        E2 = gsr2*(P2-Init.psir)
+        K12 = 2/(1/K1+1/K2)
+        L12 = K12*(P1+(SRparas.Zr1+SRparas.Zr2)/2*rhow*g/UNIT_2-P2)/(rhow*g*(SRparas.Zr1+SRparas.Zr2)/2/UNIT_2) # m/s
+        if SRparas.bc>0:
+            K3,P3,tmp,tmp,tmp,tmp,tmp = ClappHornberger(SRparas.tx,SRparas.bc,SRparas.calib)
+            K23 = 2/(1/K2+1/K3)
+            L23 = K23*(P2+SRparas.Zr2/2*rhow*g/UNIT_2-P3)/(rhow*g*SRparas.Zr2/2/UNIT_2) # m/s
+        else:
+            L23 = 0
+        s2 = min(max(Init.s2+(L12-L23-E2)/SRparas.Zr2*SRparas.dt,SRparas.sw2),SRparas.sfc2)
+
     else:
         psis = np.copy(P1)
         gsr = np.copy(gsr1)
         s2 = 0
     return psis,gsr,s2
-
 
 def Constraint_p50(theta,mVPD): #p50 < -2/b0*np.log((1+(a0*lww*mVPD/ca)**0.5)/2)
     return -2/theta[4]*np.log((1+(a0*theta[3]*mVPD/ca)**0.5)/2)
@@ -291,8 +292,6 @@ def AMIS_proposal_constraint(theta,mu,sigma,tail_para,bounds,mVPD):
     mu0,sigma0,ll = tail_para
     startTime_for_tictoc = time.time()
     while True:
-#        bn = bernoulli.rvs(ll,size=1)
-#        theta_star = multivariate_normal.rvs(mu,sigma,size = 1)*(1-bn)+multivariate_normal.rvs(mu0,sigma0,size = 1)*bn
         if bernoulli.rvs(ll,size=1) ==1:
             theta_star = multivariate_normal.rvs(mu0,sigma0,size = 1)
         else:

@@ -4,46 +4,42 @@ import pandas as pd
 from scipy.stats import uniform,norm
 import warnings; warnings.simplefilter("ignore")
 
-from myFun import SoilRoot,XylemLeaf, InitialState, f_PM_hydraulics,dailyAvg
+from myFun import SoilRoot, InitialState, f_PM_hydraulics,dailyAvg
 from myFun import Constraint_p50, Constraint_b0,AMIS_proposal_constraint,AMIS_prop_loglik,ReplaceItems,SwapChains
 
+#======= for running on server ==========
+#arrayid = int(os.environ['SLURM_ARRAY_TASK_ID']) # 0-119
+#niter = 2000
+#numchunck = 10
+#========================================
+    
+#===== for running on local machine ======
+arrayid = 0
+niter = 1
+numchunck = 2
+#=========================================
 
 sitename = 'US-Me2'
-
 # Site specific parameters
 soil_texture = 2; root_type = 4
 root_depth = 2; canopy_height = 33; tower_height = 47 # in meters
-soil_b = 0.62 # calibration coefficient for soil hydraulic parameter, unitless
-boundary_cond = 0.253 # boundary condition of the second soil layer, in volumnetric water content
 nobsinaday = 48 # number of observations per day
 
-df = pd.read_csv(sitename+'.csv')[:nobsinaday*365] # use the first year to retrieve parameters
-SRparas = SoilRoot(soil_texture,root_type,root_depth,canopy_height,tower_height,24*3600/nobsinaday,soil_b,boundary_cond)
+df = pd.read_csv(sitename+'.csv')[:nobsinaday*365] # use the first year to retrieve parameters, as an example
+SRparas = SoilRoot(soil_texture,root_type,root_depth,canopy_height,tower_height,24*3600/nobsinaday,1,0)
 Init = InitialState(-0.05,-0.1,-0.2,-0.1,df['SOILM'][0],df['SOILM2'][0])
-ww = 1 # simulate the second layer soil moisture
 
 #%  Forward Run
 
 #%% AMIS to find parameters
 def Gaussian_loglik(theta):
-    theta = theta*scale
-    XLparas = XylemLeaf(theta[0]*1e-9,theta[1],theta[2],theta[3],theta[4])
-    ET,PSIL = f_PM_hydraulics(df,XLparas,SRparas,Init,ww)
-    yhat = dailyAvg(ET,nobsinaday)[~discard]*1e3
-    return np.sum(norm.logpdf(observed_day_valid,yhat,theta[5]))
+    theta_complete = theta*scale 
+    E,PSIL = f_PM_hydraulics(df,SRparas,theta_complete)
+    yhat = dailyAvg(E,nobsinaday)[~discard]*1e3
+    return np.sum(norm.logpdf(observed_day_valid,yhat,theta[varid]*scale[varid]))
 
-# for running on server
-#arrayid = int(os.environ['SLURM_ARRAY_TASK_ID']) # 0-119
-#niter = 2000
-#numchunck = 10
-
-# for running on local machine
-arrayid = 0
-niter = 1
-numchunck = 1
 
 chains_per_site = 10
-
 outpath = 'Output/'
 
 fid = int(arrayid/chains_per_site)
@@ -54,14 +50,13 @@ discard = dailyAvg(df['P'],nobsinaday)>10/nobsinaday # rainy days
 discard[:30*2] = True # warm up period
 observed_day_valid = dailyAvg(df['ET'],nobsinaday)[~discard]
 
-#%% Set up paramters and initialize
-varnames = ['gpmax','p50','aa','lww','b0','sigma']
+varnames = ['gpmax','p50','aa','lww','b0','sigma','calib','bc']
+varid = varnames.index('sigma')
 varnames.append('loglik')
 p = int(len(varnames)-1)
 
-# Set prior range for each parameter
-lowbound = np.array([1,-10,1,500,-2,0.01])
-upbound = np.array([10000,-0.5,8,10000,0,2])
+lowbound = np.array([1,-10,1,500,-2,0.01,0.5,SRparas.sw2])
+upbound = np.array([10000,-0.5,8,10000,0,2,1.5,SRparas.ssat2])
 scale = np.max(abs(np.column_stack([lowbound,upbound])),axis=1)
 
 # Initialize, sample in a rescaled world; 
@@ -82,7 +77,6 @@ K = 20
 
 
 #%% AMIS sampling with parallel tempering
-
 theta = [uniform.rvs(loc=lowbound,scale=upbound-lowbound) for t in temps]
 for i in range(len(temps)):
     theta[i][4] = uniform.rvs(loc=lowbound[4],scale=Constraint_b0(theta[i]*scale,mVPD)/scale[4]-lowbound[4])
