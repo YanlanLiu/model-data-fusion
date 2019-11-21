@@ -24,7 +24,7 @@ SRparas = SoilRoot(soil_texture,root_type,root_depth,canopy_height,tower_height,
 XLparas = XylemLeaf(gpmax,p50,aa,lww,b0)
 Init = InitialState(-0.05,-0.1,-0.2,-0.1,df['SOILM'][0],df['SOILM2'][0])
 
-ww = 1 # simulate the second layer soil moisture
+ww = 0 # simulate the second layer soil moisture
 #ww = 1  # use SOILM2 in df as the second layer soil moisture
 ET,PSIL = f_PM_hydraulics(df,XLparas,SRparas,Init,ww)
 
